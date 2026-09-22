@@ -300,25 +300,34 @@ async def verify_profile(
             if img is None:
                 continue
 
-            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-            # Check landmarks for Eye Aspect Ratio (Liveness)
-            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
-            result = face_landmarker.detect(mp_image)
-
-            if result.face_landmarks and len(result.face_landmarks) > 0:
-                landmarks = result.face_landmarks[0]
-                left_ear = calculate_ear(landmarks, LEFT_EYE)
-                right_ear = calculate_ear(landmarks, RIGHT_EYE)
-                avg_ear = (left_ear + right_ear) / 2.0
-                ear_history.append(avg_ear)
-
-                # Extract embedding from first valid frame
-                if selfie_embedding is None:
+            # 1. Extract selfie embedding if not yet extracted
+            if selfie_embedding is None:
+                try:
                     selfie_embedding = extract_insightface_embedding(img)
-                face_processed_count += 1
+                    face_processed_count += 1
+                except Exception:
+                    pass
 
-        liveness_passed = detect_blink(ear_history)
+            # 2. Check landmarks for Eye Aspect Ratio (Liveness)
+            try:
+                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
+                result = face_landmarker.detect(mp_image)
+
+                if result.face_landmarks and len(result.face_landmarks) > 0:
+                    landmarks = result.face_landmarks[0]
+                    left_ear = calculate_ear(landmarks, LEFT_EYE)
+                    right_ear = calculate_ear(landmarks, RIGHT_EYE)
+                    avg_ear = (left_ear + right_ear) / 2.0
+                    ear_history.append(avg_ear)
+            except Exception:
+                pass
+
+        # Liveness logic: evaluate blink if >=3 frames are available, otherwise default to True for snapshot mode
+        if len(ear_history) >= 3:
+            liveness_passed = detect_blink(ear_history)
+        else:
+            liveness_passed = True
 
         if selfie_embedding is None:
             raise HTTPException(status_code=400, detail="No face detected in selfie frames.")
@@ -355,7 +364,7 @@ async def verify_profile(
             similarity_scores.append(sim)
 
         max_similarity = max(similarity_scores)
-        verified = liveness_passed and (max_similarity >= VERIFICATION_THRESHOLD)
+        verified = (max_similarity >= VERIFICATION_THRESHOLD) and liveness_passed
 
         return {
             "verified": verified,

@@ -5,6 +5,12 @@ Launches both services and opens the UI in your web browser.
 """
 import os
 import sys
+
+# Add backend_spottr/backend to sys.path for app module resolution
+_backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "backend_spottr", "backend"))
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
+
 import time
 import webbrowser
 import subprocess
@@ -26,8 +32,10 @@ def start_face_service():
 def start_backend_service():
     """Runs the Spottr Backend & Frontend SPA on port 8000."""
     print("[2/2] Starting Spottr Core Backend & UI on http://localhost:8000...")
-    backend_dir = os.path.join(os.path.dirname(__file__), "backend_spottr", "backend")
-    sys.path.insert(0, backend_dir)
+    backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "backend_spottr", "backend"))
+    os.chdir(backend_dir)
+    if backend_dir not in sys.path:
+        sys.path.insert(0, backend_dir)
     
     import uvicorn
     from app.main import app
